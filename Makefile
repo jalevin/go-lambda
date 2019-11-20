@@ -2,19 +2,22 @@ all: aws test main main.zip createRole attachRole testRole uploadLambda executeL
 
 AWSLambdaName :="HelloWorld"
 AWSLambdaRole :="lambda-basic-execution"
+GoTarget := main.go
+GoBinary := main
+
 
 .PHONY: aws test createRole attachRole testRole uploadLambda executeLambda
 
 # verify we have a legit AWS account we can use
 aws:
-	@echo $(AWSAccount)
+	@echo ${shell aws sts get-caller-identity --query Arn --output text}
 
 # run tests on go code
 test:
 	go test
 
 # compile code for aws lambda context
-main: go.mod main.go
+main: go.mod ${GoTarget}
 	GOOS=linux GOARCH=amd64 go build -o main main.go
 
 # put binary in a zip file
@@ -35,6 +38,7 @@ testRole:
 
 # upload the lambda function
 uploadLambda: main.zip
+	sleep 3
 	aws lambda create-function --function-name ${AWSLambdaName} \
 	--zip-file fileb://main.zip \
 	--handler main \
@@ -46,11 +50,16 @@ executeLambda:
 	aws lambda invoke --function-name ${AWSLambdaName} request.txt
 	echo `cat request.txt`
 
+# delete revisions of function
+
+
 # delete all files
-cleanup:
-	rm main
-	rm main.zip
-	aws lambda delete-function --function-name ${AWSLambdaName}
-	aws iam detach-role-policy --role-name ${AWSLambdaRole} --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-	aws iam delete-role --role-name ${AWSLambdaRole}
+# - in front of commands make sure they run even if failed.
+# This allows us to delete things in the correct order, but also make sure they get run
+clean:
+	-rm main
+	-rm main.zip
+	-aws lambda delete-function --function-name ${AWSLambdaName}
+	-aws iam detach-role-policy --role-name ${AWSLambdaRole} --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+	-aws iam delete-role --role-name ${AWSLambdaRole}
 
