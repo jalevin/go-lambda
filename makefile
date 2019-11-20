@@ -1,7 +1,9 @@
-all: aws test compile compress createRole attachRole testRole uploadLambda executeLambda
+all: aws test main main.zip createRole attachRole testRole uploadLambda executeLambda
 
 AWSLambdaName :="HelloWorld"
 AWSLambdaRole :="lambda-basic-execution"
+
+.PHONY: aws test createRole attachRole testRole uploadLambda executeLambda
 
 # verify we have a legit AWS account we can use
 aws:
@@ -12,15 +14,15 @@ test:
 	go test
 
 # compile code for aws lambda context
-compile: 
+main: go.mod main.go
 	GOOS=linux GOARCH=amd64 go build -o main main.go
 
 # put binary in a zip file
-compress:
+main.zip: main
 	zip main.zip main
 
 # create execution role for lambda
-createRole:
+createRole: lambda-trust-policy.json
 	aws iam create-role --role-name ${AWSLambdaRole} --assume-role-policy-document file://lambda-trust-policy.json
 
 # attach execution role
@@ -32,7 +34,7 @@ testRole:
 	aws iam get-role --role-name ${AWSLambdaRole}
 
 # upload the lambda function
-uploadLambda:
+uploadLambda: main.zip
 	aws lambda create-function --function-name ${AWSLambdaName} \
 	--zip-file fileb://main.zip \
 	--handler main \
@@ -51,4 +53,4 @@ cleanup:
 	aws lambda delete-function --function-name ${AWSLambdaName}
 	aws iam detach-role-policy --role-name ${AWSLambdaRole} --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
 	aws iam delete-role --role-name ${AWSLambdaRole}
-	
+
